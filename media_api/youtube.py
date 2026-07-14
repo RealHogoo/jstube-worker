@@ -437,6 +437,7 @@ def ensure_browser_playable_mp4(path: Path) -> Path:
     command_line = [
         ffmpeg,
         "-y",
+        *ffmpeg_thread_args(),
         "-i",
         str(path),
         "-map",
@@ -445,6 +446,7 @@ def ensure_browser_playable_mp4(path: Path) -> Path:
         "0:a?",
         "-c:v",
         "copy" if video_codec == "h264" else "libx264",
+        *ffmpeg_thread_args(),
         "-c:a",
         "aac",
         "-b:a",
@@ -472,6 +474,7 @@ def normalize_youtube_mp4(path: Path) -> Path:
     command_line = [
         ffmpeg,
         "-y",
+        *ffmpeg_thread_args(),
         "-i",
         str(path),
         "-map",
@@ -482,6 +485,7 @@ def normalize_youtube_mp4(path: Path) -> Path:
         scale_filter,
         "-c:v",
         "libx264",
+        *ffmpeg_thread_args(),
         "-preset",
         preset,
         "-profile:v",
@@ -691,6 +695,7 @@ def create_direct_video_thumbnail(storage_path: Path, owner_user_id: str, create
         [
             ffmpeg,
             "-y",
+            *ffmpeg_thread_args(),
             "-ss",
             "00:00:01",
             "-i",
@@ -872,6 +877,15 @@ def ffmpeg_command() -> str | None:
     if bundled:
         return bundled
     return shutil.which("ffmpeg")
+
+def ffmpeg_thread_args() -> list[str]:
+    try:
+        threads = int(settings.MEDIA_CONFIG.get("YOUTUBE_FFMPEG_THREADS") or 0)
+    except (TypeError, ValueError):
+        threads = 0
+    if threads <= 0:
+        return []
+    return ["-threads", str(min(max(threads, 1), 8))]
 
 def ffprobe_command() -> str | None:
     configured = str(settings.MEDIA_CONFIG.get("YOUTUBE_FFMPEG_PATH") or "").strip()

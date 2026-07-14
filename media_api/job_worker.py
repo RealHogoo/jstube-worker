@@ -20,8 +20,8 @@ from .views import (
 )
 
 
-YOUTUBE_STALE_STATUSES = {"QUEUED", "FAILED"}
-TIME_TAG_STALE_STATUSES = {"QUEUED", "FAILED"}
+YOUTUBE_CLAIMABLE_STATUSES = {"QUEUED"}
+TIME_TAG_CLAIMABLE_STATUSES = {"QUEUED"}
 
 
 def worker_id() -> str:
@@ -33,7 +33,7 @@ def claim_youtube_item(worker: str, lease_seconds: int) -> dict[str, Any] | None
     reset_stale_youtube_items(now)
     lease_expires_at = now + timedelta(seconds=lease_seconds)
     job = youtube_job_collection().find_one_and_update(
-        {"items": {"$elemMatch": {"status": {"$in": sorted(YOUTUBE_STALE_STATUSES)}}}},
+        {"items": {"$elemMatch": {"status": {"$in": sorted(YOUTUBE_CLAIMABLE_STATUSES)}}}},
         {
             "$set": {
                 "status": "RUNNING",
@@ -169,7 +169,7 @@ def claim_time_tag_item(worker: str, lease_seconds: int) -> dict[str, Any] | Non
     reset_stale_time_tag_items(now)
     lease_expires_at = now + timedelta(seconds=lease_seconds)
     job = time_tag_job_collection().find_one_and_update(
-        {"items": {"$elemMatch": {"status": {"$in": sorted(TIME_TAG_STALE_STATUSES)}}}},
+        {"items": {"$elemMatch": {"status": {"$in": sorted(TIME_TAG_CLAIMABLE_STATUSES)}}}},
         {
             "$set": {
                 "status": "RUNNING",

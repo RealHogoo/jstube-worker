@@ -91,6 +91,7 @@ MEDIA_CONFIG = {
     "YOUTUBE_VIDEO_MAX_HEIGHT": int(os.environ.get("YOUTUBE_VIDEO_MAX_HEIGHT", "1080")),
     "YOUTUBE_VIDEO_CRF": int(os.environ.get("YOUTUBE_VIDEO_CRF", "23")),
     "YOUTUBE_VIDEO_PRESET": os.environ.get("YOUTUBE_VIDEO_PRESET", "veryfast"),
+    "YOUTUBE_FFMPEG_THREADS": int(os.environ.get("YOUTUBE_FFMPEG_THREADS", "0")),
     "YOUTUBE_AUDIO_BITRATE": os.environ.get("YOUTUBE_AUDIO_BITRATE", "160k"),
 }
 
