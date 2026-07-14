@@ -70,14 +70,17 @@ def worker_status_snapshot() -> dict[str, Any]:
     stale_after = now - timedelta(seconds=max(stale_seconds, 10))
 
     pods = []
+    stale_pods = []
     active_count = 0
     for row in worker_heartbeat_collection().find({}, {"_id": 0}).sort("worker_id", 1).limit(50):
         heartbeat_at = row.get("heartbeat_at")
         stale = not isinstance(heartbeat_at, datetime) or heartbeat_at < stale_after
-        if not stale:
-            active_count += 1
         row["stale"] = stale
-        pods.append(serialize_dates(row))
+        if stale:
+            stale_pods.append(serialize_dates(row))
+        else:
+            active_count += 1
+            pods.append(serialize_dates(row))
 
     locks = [
         serialize_dates(row)
@@ -91,6 +94,7 @@ def worker_status_snapshot() -> dict[str, Any]:
         "active_count": active_count,
         "stale_seconds": stale_seconds,
         "pods": pods,
+        "stale_pods": stale_pods,
         "locks": locks,
         "jobs": {
             "youtube": job_item_status_counts("youtube_import_jobs"),
