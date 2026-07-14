@@ -3,6 +3,7 @@ import socket
 from datetime import datetime, timedelta
 from typing import Any
 
+from pymongo.errors import DuplicateKeyError
 from pymongo import ReturnDocument
 
 from .auth import CurrentUser
@@ -62,6 +63,10 @@ def run_claimed_youtube_item(claim: dict[str, Any]) -> str:
     job = claim["job"]
     item = claim["item"]
     video_id = str(item.get("youtube_video_id") or "")
+    worker = str(item.get("worker_id") or worker_id())
+    if not acquire_youtube_video_lock(video_id, worker, int(os.getenv("MEDIA_WORKER_LEASE_SECONDS", "7200"))):
+        requeue_youtube_item(str(job.get("job_id") or ""), video_id, "same video is already running")
+        return "QUEUED"
     user = user_from_job(job)
     try:
         result = import_youtube_item(
@@ -76,9 +81,12 @@ def run_claimed_youtube_item(claim: dict[str, Any]) -> str:
     except Exception as exc:
         update_youtube_import_item(job["job_id"], video_id, "FAILED", str(exc)[:500], None, None)
         return "FAILED"
+    finally:
+        release_youtube_video_lock(video_id, worker)
 
 
 def reset_stale_youtube_items(now: datetime) -> None:
+    youtube_video_lock_collection().delete_many({"lease_expires_at": {"$lt": now}})
     while True:
         result = youtube_job_collection().update_one(
             {
@@ -104,6 +112,64 @@ def reset_stale_youtube_items(now: datetime) -> None:
         )
         if result.modified_count == 0:
             break
+
+
+def youtube_video_lock_collection():
+    db = youtube_job_collection().database
+    collection = db["youtube_video_locks"]
+    collection.create_index([("video_id", 1)], unique=True)
+    collection.create_index([("lease_expires_at", 1)])
+    return collection
+
+
+def acquire_youtube_video_lock(video_id: str, worker: str, lease_seconds: int) -> bool:
+    if not video_id:
+        return False
+    now = datetime.utcnow()
+    lease_expires_at = now + timedelta(seconds=max(lease_seconds, 60))
+    try:
+        result = youtube_video_lock_collection().find_one_and_update(
+            {
+                "video_id": video_id,
+                "$or": [
+                    {"lease_expires_at": {"$lt": now}},
+                    {"worker_id": worker},
+                ],
+            },
+            {"$set": {"video_id": video_id, "worker_id": worker, "lease_expires_at": lease_expires_at, "updated_at": now}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        return False
+    return bool(result and result.get("worker_id") == worker)
+
+
+def release_youtube_video_lock(video_id: str, worker: str) -> None:
+    if video_id:
+        youtube_video_lock_collection().delete_one({"video_id": video_id, "worker_id": worker})
+
+
+def requeue_youtube_item(job_id: str, video_id: str, message: str) -> None:
+    now = datetime.utcnow()
+    youtube_job_collection().update_one(
+        {"job_id": job_id, "items.youtube_video_id": video_id},
+        {
+            "$set": {
+                "status": "QUEUED",
+                "message": message[:500],
+                "updated_at": now,
+                "items.$.status": "QUEUED",
+                "items.$.message": message[:500],
+                "items.$.finished_at": None,
+            },
+            "$unset": {
+                "items.$.worker_id": "",
+                "items.$.lease_expires_at": "",
+            },
+        },
+    )
+    refresh_youtube_job_status(job_id)
 
 
 def claim_time_tag_item(worker: str, lease_seconds: int) -> dict[str, Any] | None:
