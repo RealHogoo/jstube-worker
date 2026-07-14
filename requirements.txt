@@ -1,0 +1,5 @@
+Django==5.1.15
+pymongo==4.10.1
+requests==2.33.0
+qrcode==8.2
+Pillow==12.2.0
