@@ -1,5 +1,4 @@
 import os
-import socket
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -8,6 +7,7 @@ from pymongo import ReturnDocument
 
 from .auth import CurrentUser
 from .job_crypto import decrypt_job_secret
+from .worker_status import default_worker_id, youtube_video_lock_collection
 from .views import (
     import_youtube_item,
     normalize_import_tags,
@@ -25,7 +25,7 @@ TIME_TAG_STALE_STATUSES = {"QUEUED", "FAILED"}
 
 
 def worker_id() -> str:
-    return os.getenv("MEDIA_WORKER_ID") or f"{socket.gethostname()}:{os.getpid()}"
+    return default_worker_id()
 
 
 def claim_youtube_item(worker: str, lease_seconds: int) -> dict[str, Any] | None:
@@ -112,14 +112,6 @@ def reset_stale_youtube_items(now: datetime) -> None:
         )
         if result.modified_count == 0:
             break
-
-
-def youtube_video_lock_collection():
-    db = youtube_job_collection().database
-    collection = db["youtube_video_locks"]
-    collection.create_index([("video_id", 1)], unique=True)
-    collection.create_index([("lease_expires_at", 1)])
-    return collection
 
 
 def acquire_youtube_video_lock(video_id: str, worker: str, lease_seconds: int) -> bool:
