@@ -66,7 +66,7 @@ def update_worker_heartbeat(
 def worker_status_snapshot() -> dict[str, Any]:
     now = datetime.utcnow()
     stale_seconds = int(os.getenv("MEDIA_WORKER_STALE_SECONDS", "60"))
-    expected = int(os.getenv("MEDIA_WORKER_EXPECTED_REPLICAS", os.getenv("JSTUBE_WORKER_REPLICAS", "3")))
+    expected = int(os.getenv("MEDIA_WORKER_EXPECTED_REPLICAS", os.getenv("JSTUBE_WORKER_REPLICAS", "1")))
     stale_after = now - timedelta(seconds=max(stale_seconds, 10))
 
     pods = []

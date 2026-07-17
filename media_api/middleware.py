@@ -15,6 +15,7 @@ class SecurityHeaderMiddleware:
         response["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response["Cross-Origin-Opener-Policy"] = "same-origin"
         response["Cross-Origin-Resource-Policy"] = "same-origin"
+        response.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
         if request.is_secure() or request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":
             response["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
