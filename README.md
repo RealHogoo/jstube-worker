@@ -1,19 +1,42 @@
 # jstube-worker
 
-Distributed background worker for the JsTube media service.
+Background worker for the JsTube media service.
 
-The worker consumes MongoDB-backed media jobs created by `jsTube-api` and processes:
+The worker uses the same Django codebase shape as `jsTube-api`, but it runs the
+`media_worker` management command instead of serving HTTP. Source code only
+belongs in this repository. Do not commit production `.env` files, tokens,
+database dumps, media files, or private keys.
 
-- YouTube download/import jobs
-- MP4 browser-normalization through ffmpeg
-- Webhard registration/upload handoff
-- Karaoke time-tag generation
+## Role
 
-The worker does not expose an HTTP port. Run multiple replicas with Docker Compose scaling, for example:
+- Claim MongoDB-backed YouTube import jobs.
+- Download/import selected YouTube videos.
+- Normalize downloaded videos with ffmpeg before registering them in webhard.
+- Register uploaded media through the webhard internal API.
+- Generate karaoke time tags.
+- Publish worker heartbeat/status documents for the admin UI.
+
+## Queue Behavior
+
+The worker only claims items in `QUEUED` state.
+
+`FAILED` items remain failed until a user explicitly starts or recreates work.
+This prevents a broken item from being retried forever and burning CPU.
+
+Long-running `RUNNING` items whose lease expires are marked `FAILED` with a
+stale-worker message. They are not automatically claimed again unless they are
+changed back to `QUEUED`.
+
+## Replicas
+
+The current low-resource production default is one worker replica:
 
 ```sh
-docker compose up --scale jstube-worker=3 -d jstube-worker
+JSTUBE_WORKER_REPLICAS=1
 ```
+
+The API can run more replicas, but ffmpeg/download work should stay on the
+worker and is normally scheduled conservatively.
 
 ## Runtime
 
@@ -33,6 +56,16 @@ Useful worker controls:
 - `MEDIA_WORKER_QUEUES=youtube,time-tags`
 - `MEDIA_WORKER_POLL_SECONDS=2`
 - `MEDIA_WORKER_LEASE_SECONDS=7200`
+- `MEDIA_WORKER_HEARTBEAT_SECONDS=15`
+- `MEDIA_WORKER_STALE_SECONDS=60`
 - `MEDIA_WORKER_ID=<optional-stable-id>`
 
-Do not commit production `.env` files, tokens, database dumps, media files, or private keys.
+## Local
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python manage.py check
+python manage.py media_worker
+```
